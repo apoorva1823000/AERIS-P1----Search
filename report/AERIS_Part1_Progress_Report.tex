@@ -1,0 +1,126 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{enumitem}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage[hidelinks]{hyperref}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{5pt}
+\renewcommand{\arraystretch}{1.15}
+\setlist[itemize]{leftmargin=1.35em,itemsep=2pt,topsep=3pt}
+
+\begin{document}
+
+\begin{center}
+    {\Large \textbf{AERIS -- Part 1 Progress Report}}\\[4pt]
+    \textbf{CSE518 Artificial Intelligence -- Monsoon 2026}\\[6pt]
+    Apoorva Sanjaykumar Mehta (AU2649003)
+\end{center}
+
+\hrule
+\vspace{0.7em}
+
+\section{Objective}
+Part 1 of AERIS implements the deterministic routing stage of the medical-supply delivery system. The road network is treated as fully observable: each road is either known to be open or known to be blocked. The system combines a small reactive control layer with graph search. Reactive rules handle immediate feasibility checks, while the deliberative layer uses BFS, UCS and A* to select a route from the depot to the requested destination.
+
+The aim of this stage is to study A* in detail, especially the effect of different heuristic functions on search effort. Probabilistic road-state estimation and sequential decision making are kept for Part 2.
+
+\section{Search Problem Formulation}
+The deterministic routing problem is represented as follows.
+
+\begin{center}
+\begin{tabular}{>{\raggedright\arraybackslash}p{0.28\textwidth} p{0.62\textwidth}}
+\toprule
+\textbf{Element} & \textbf{Definition in AERIS Part 1} \\
+\midrule
+State & Current node / vehicle position in the road network \\
+Initial state & Depot \\
+Actions & Traverse an adjacent road that is known to be open \\
+Transition model & Move from the current node to the selected adjacent node \\
+Goal test & Current node is the selected hospital, relief camp or demand point \\
+Path cost & Sum of deterministic edge traversal costs \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+For A*, the evaluation function is
+\[
+    f(n)=g(n)+h(n),
+\]
+where $g(n)$ is the accumulated path cost from the depot and $h(n)$ estimates the remaining cost to the goal. The application displays the expanded node, frontier, closed set and the corresponding $g(n)$, $h(n)$ and $f(n)$ values during the search.
+
+\section{Reactive Control}
+The reactive part of the system is intentionally simple in Part 1. It applies the following rules before or during route execution:
+\begin{itemize}
+    \item a road marked as blocked is never used by the planner;
+    \item if a known road state changes, the current route is invalidated and search is performed again;
+    \item transport-mode feasibility is checked before a route is accepted;
+    \item UAV-supporting legs retain a minimum battery reserve where applicable.
+\end{itemize}
+
+The important point in Part 1 is that these conditions are known. No probability distribution is used for road availability at this stage.
+
+\section{A* Heuristics}
+Four heuristics are implemented and compared.
+
+\begin{center}
+\begin{tabular}{p{0.23\textwidth} p{0.39\textwidth} p{0.27\textwidth}}
+\toprule
+\textbf{Heuristic} & \textbf{Definition} & \textbf{Role} \\
+\midrule
+H1: Zero & $h_1(n)=0$ & UCS-equivalent baseline \\
+H2: Geometric lower bound & Straight-line distance multiplied by the minimum observed cost per unit distance & Low-cost geometric estimate \\
+H3: Relaxed network & Shortest-path cost in a lower-cost relaxed version of the road network & Relaxed-problem estimate \\
+H4: Combined & $h_4(n)=\max(h_2(n),h_3(n))$ & Tests heuristic dominance \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+For H3, each traversable edge in the relaxed graph uses
+\[
+    c_{\mathrm{relaxed}}(e)=\min\bigl(c_{\mathrm{original}}(e),\;d_{\mathrm{geom}}(e)\bigr).
+\]
+Since the relaxed edge cost is never larger than the original edge cost, the relaxed shortest-path value provides a lower bound on the original remaining path cost.
+
+\section{Comparison Results}
+The four heuristics were tested on three deterministic sample maps. The comparison records path cost, number of expanded nodes, runtime, admissibility and consistency. The mean results are shown below.
+
+\begin{center}
+\begin{tabular}{lcccc}
+\toprule
+\textbf{Heuristic} & \textbf{Mean cost} & \textbf{Mean expanded} & \textbf{Admissible} & \textbf{Consistent} \\
+\midrule
+H1: Zero & 7.00 & 7.00 & Yes & Yes \\
+H2: Geometric & 7.00 & 6.33 & Yes & Yes \\
+H3: Relaxed network & 7.00 & 5.00 & Yes & Yes \\
+H4: $\max(H2,H3)$ & 7.00 & 5.00 & Yes & Yes \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+All four heuristics produced the same optimal mean path cost on the bundled maps. H1 expanded the most nodes because it has no goal-directed information. H2 reduced the search slightly. H3 and H4 required fewer node expansions in these examples while remaining admissible and consistent. The purpose of the comparison is therefore not only to measure runtime, but also to observe how a more informed heuristic changes the amount of search performed.
+
+\section{External Map Input}
+The application is not restricted to one built-in graph. It can load an external road network in either JSON format or from CSV files containing nodes and edges, with an optional request file. The importer checks for a Depot node, valid coordinates, positive costs for open roads and at least one valid delivery destination. Three JSON maps and CSV templates are included with the project.
+
+\section{Testing and Current Status}
+The final Part 1 implementation was tested after integrating the external-map and heuristic-comparison changes. The focused integration suite passed 150 of 150 checks, and the randomized regression suite passed 3423 of 3423 checks. The tests covered blocked-road handling, unreachable destinations, agreement between A* and UCS on optimal path cost, H1--H4 admissibility and consistency, external-map validation, and propagation of road edits across the search and comparison modules.
+
+The following Part 1 deliverables are complete:
+\begin{itemize}
+    \item Streamlit application for deterministic routing and A* visualization;
+    \item BFS, UCS and A* implementations;
+    \item four A* heuristics with admissibility and consistency checks;
+    \item external JSON/CSV road-network input;
+    \item heuristic-comparison notebook and result file;
+    \item this progress report.
+\end{itemize}
+
+\section{Next Stage}
+Part 2 will reuse the Part 1 route planner but will no longer assume that road state is perfectly known. The next stage will add Bayesian road-accessibility estimates, HMM-based temporal updates, risk-aware A* costs and an MDP for high-level sequential decisions. These extensions are kept separate from Part 1 so that the deterministic search component can be evaluated independently.
+
+\end{document}
